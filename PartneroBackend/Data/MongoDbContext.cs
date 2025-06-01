@@ -1,4 +1,5 @@
 ﻿using MongoDB.Driver;
+using PartneroBackend.Models;
 using PartneroBackend.Models.InfoClasses;
 
 namespace PartneroBackend.Data
@@ -6,6 +7,7 @@ namespace PartneroBackend.Data
     public class MongoDbContext
     {
         public IMongoCollection<BusinessInfo> BusinessInfos { get; }
+        public IMongoCollection<ApplicationUser> ApplicationUsers { get; }
 
         public MongoDbContext(IConfiguration config)
         {
@@ -13,7 +15,7 @@ namespace PartneroBackend.Data
             var database = client.GetDatabase("Partnero");
 
             BusinessInfos = database.GetCollection<BusinessInfo>("BusinessInfos");
-
+            ApplicationUsers = database.GetCollection<ApplicationUser>("users");
         }
     }
 }
