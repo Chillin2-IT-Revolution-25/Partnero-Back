@@ -1,3 +1,4 @@
+using Amazon.S3;
 using AspNetCore.Identity.MongoDbCore.Extensions;
 using AspNetCore.Identity.MongoDbCore.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -9,6 +10,7 @@ using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Driver;
 using PartneroBackend.Data;
 using PartneroBackend.Models;
+using PartneroBackend.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,13 +20,20 @@ BsonSerializer.RegisterSerializer(new GuidSerializer(MongoDB.Bson.BsonType.Strin
 BsonSerializer.RegisterSerializer(new DateTimeSerializer(MongoDB.Bson.BsonType.String));
 BsonSerializer.RegisterSerializer(new DateTimeOffsetSerializer(MongoDB.Bson.BsonType.String));
 
-var MongoDbConnectionString = builder.Configuration.GetConnectionString("MongoDbConnectionString");
+var awsSettings = builder.Configuration.GetSection("AWS");
+builder.Services.AddSingleton<IAmazonS3>(new AmazonS3Client(
+    awsSettings["AccessKey"],
+    awsSettings["SecretKey"],
+    Amazon.RegionEndpoint.GetBySystemName(awsSettings["Region"])
+));
 
-var MongoDbIdentityConfig = new MongoDbIdentityConfiguration
+var mongoDbConnectionString = builder.Configuration.GetConnectionString("MongoDbConnectionString");
+
+var mongoDbIdentityConfig = new MongoDbIdentityConfiguration
 {
     MongoDbSettings = new MongoDbSettings
     {
-        ConnectionString = MongoDbConnectionString,
+        ConnectionString = mongoDbConnectionString,
         DatabaseName = "Partnero"
     },
     IdentityOptionsAction = options =>
@@ -41,13 +50,14 @@ var MongoDbIdentityConfig = new MongoDbIdentityConfiguration
     }
 };
 
-builder.Services.AddSingleton<MongoDbContext>();
-
-builder.Services.ConfigureMongoDbIdentity<ApplicationUser, ApplicationRole, ObjectId>(MongoDbIdentityConfig)
+builder.Services.ConfigureMongoDbIdentity<ApplicationUser, ApplicationRole, ObjectId>(mongoDbIdentityConfig)
     .AddUserManager<UserManager<ApplicationUser>>()
     .AddSignInManager<SignInManager<ApplicationUser>>()
     .AddRoleManager<RoleManager<ApplicationRole>>()
     .AddDefaultTokenProviders();
+
+builder.Services.AddSingleton<MongoDbContext>();
+builder.Services.AddSingleton<S3Service>();
 
 builder.Services.AddAuthentication(x =>
 {
