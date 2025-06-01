@@ -7,8 +7,10 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 using PartneroBackend.Data;
 using PartneroBackend.Models;
+using PartneroBackend.Models.DTOs;
 using PartneroBackend.Models.DTOs.AuthDTOs;
 using PartneroBackend.Models.InfoClasses;
+using PartneroBackend.Services;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Security.Claims;
@@ -60,16 +62,13 @@ namespace PartneroBackend.Controllers
                 var user = await userManager.FindByEmailAsync(registerRequest.Email);
 
                 if (user is not null)
-                {
                     return new RegisterResponse { Message = "User already exists", Success = false };
-                }
 
                 var businessInfo = new BusinessInfo
                 {
                     BusinessName = registerRequest.BusinessName,
                     Category = registerRequest.Category,
                     Description = registerRequest.Description,
-                    CompanySize = null,
                     FoundedYear = null
                 };
 
@@ -104,12 +103,35 @@ namespace PartneroBackend.Controllers
                     update
                 );
 
+                BusinessInfoForMicroservice businessInfoForMicroservice = new()
+                {
+                    user_id = user.Id.ToString(),
+                    name = businessInfo.BusinessName,
+                    category = businessInfo.Category,
+                    description = businessInfo.Description,
+                    location = new LocationChangeForDamian
+                    {
+                        display_name = businessInfo.Location?.DisplayName ?? string.Empty,
+                        street = businessInfo.Location?.Street ?? string.Empty,
+                        city = businessInfo.Location?.City ?? string.Empty,
+                        state = businessInfo.Location?.State ?? string.Empty,
+                        postcode = businessInfo.Location?.Postcode ?? string.Empty,
+                        country = businessInfo.Location?.Country ?? string.Empty,
+                        latitude = businessInfo.Location?.Latitude ?? 0.0,
+                        longitude = businessInfo.Location?.Longitude ?? 0.0
+                    },
+                    company_size = (int)businessInfo.CompanySize,
+                    founded_year = 2008,
+                    business_image_urls = businessInfo.BusinessImageUrls,
+                    social_media = businessInfo.SocialMedia
+                };
+
+                await MicroserviceHandler.SendBusinessInfo(businessInfoForMicroservice);
+
                 var addRoleResult = await userManager.AddToRoleAsync(user, "User");
 
                 if (!addRoleResult.Succeeded)
-                {
                     return new RegisterResponse { Message = "Failed to assign role", Success = false };
-                }
 
                 var claims = new List<Claim>
                 {
@@ -139,9 +161,22 @@ namespace PartneroBackend.Controllers
                 {
                     Message = "User registered successfully",
                     Success = true,
-                    AccessToken = new JwtSecurityTokenHandler().WriteToken(token),
-                    Email = user.Email,
-                    UserId = user.Id.ToString()
+                    User = new ApplicationUserDto
+                    {
+                        FirstName = user.PersonalInfo.FirstName,
+                        LastName = user.PersonalInfo.LastName,
+                        Email = user.Email!,
+                        AvatarUrl = user.PersonalInfo.ProfilePictureUrl ?? string.Empty,
+                        UserId = user.Id.ToString(),
+                        AccessToken = new JwtSecurityTokenHandler().WriteToken(token),
+                        BusinessInfo = new UserBusinessInfoDto
+                        {
+                            Name = businessInfo.BusinessName ?? string.Empty,
+                            Description = businessInfo.Description ?? string.Empty,
+                            Location = businessInfo.Location?.DisplayName ?? string.Empty,
+                            Category = businessInfo.Category ?? string.Empty
+                        }
+                    }
                 };
             }
             catch (Exception ex)
@@ -158,8 +193,12 @@ namespace PartneroBackend.Controllers
                 var user = await userManager.FindByEmailAsync(loginRequest.Email);
 
                 if (user is null || !await userManager.CheckPasswordAsync(user, loginRequest.Password))
-                {
                     return new LoginResponse { Success = false };
+
+                BusinessInfo? businessInfo = null;
+                if (user.BusinessInfoId != ObjectId.Empty)
+                {
+                    businessInfo = await context.BusinessInfos.Find(b => b.Id == user.BusinessInfoId).FirstOrDefaultAsync();
                 }
 
                 var claims = new List<Claim>
@@ -189,14 +228,27 @@ namespace PartneroBackend.Controllers
                 return new LoginResponse
                 {
                     Success = true,
-                    AccessToken = new JwtSecurityTokenHandler().WriteToken(token),
-                    Email = user.Email!,
-                    UserId = user.Id.ToString()
+                    User = new ApplicationUserDto
+                    {
+                        FirstName = user.PersonalInfo.FirstName,
+                        LastName = user.PersonalInfo.LastName,
+                        Email = user.Email!,
+                        AvatarUrl = user.PersonalInfo.ProfilePictureUrl ?? string.Empty,
+                        UserId = user.Id.ToString(),
+                        AccessToken = new JwtSecurityTokenHandler().WriteToken(token),
+                        BusinessInfo = new UserBusinessInfoDto
+                        {
+                            Name = businessInfo?.BusinessName ?? string.Empty,
+                            Description = businessInfo?.Description ?? string.Empty,
+                            Location = businessInfo?.Location?.DisplayName.ToString() ?? string.Empty,
+                            Category = businessInfo?.Category ?? string.Empty
+                        }
+                    }
                 };
             } catch (Exception ex)
             {
                 Console.WriteLine($"Login error: {ex.Message}");
-                return new LoginResponse { Success = false, AccessToken = string.Empty, Email = string.Empty, UserId = string.Empty };
+                return new LoginResponse { Success = false };
             }
         }
     }
