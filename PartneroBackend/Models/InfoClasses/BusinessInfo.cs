@@ -3,13 +3,7 @@ using MongoDB.Bson.Serialization.Attributes;
 
 namespace PartneroBackend.Models.InfoClasses
 {
-    public enum CompanySize
-    {
-        Small,
-        Medium,
-        Large
-    }
-
+    [BsonIgnoreExtraElements]
     public class BusinessInfo
     {
         [BsonId]
@@ -24,7 +18,7 @@ namespace PartneroBackend.Models.InfoClasses
         public LocationInfo? Location { get; set; }
 
         public string? Description { get; set; }
-        public CompanySize? CompanySize { get; set; }
+        public int CompanySize { get; set; }
         public int? FoundedYear { get; set; }
 
         public List<string> BusinessImageUrls { get; set; } = [];
